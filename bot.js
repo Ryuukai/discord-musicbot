@@ -3,9 +3,11 @@ var spawn = require('child_process').spawn;
 var fs = require('fs');
 var path = require('path');
 var youtubedl = require('youtube-dl');
+var config = require('./config');
+if(!config.token) throw "YOU ARE MISSING THE TOKEN FROM YOUR CONFIG. PLEASE EDIT THE CONFIG FILE";
 var bot = new Discord.Client({
     autorun: true,
-    token: ""
+    token: config.token
 });
 /* MUSICBOT OBJECTS */
 var voice_channel = {};
@@ -14,18 +16,17 @@ var songQ = {};
 
 var startup;
 
-var commandchar = "!"; //Change to your preferred character/string
-
 bot.on('ready', function() {
     console.log("Logged in as: "+bot.username + " - (" + bot.id + ")");
     startup = new Date();
+    if (config.showDefaultGame) bot.setPresence({game: config.defaultGame.game, type: config.defaultGame.type, url: config.defaultGame.url});
 });
 
 bot.on('message', function(user, userID, channelID, message, rawEvent) {
   var serverID = bot.serverFromChannel(channelID);
   console.log(user+" ("+userID+"): "+message);
-  if(message.substring(0, commandchar.length) === commandchar){
-		var command = message.substring(commandchar.length).split(' ');
+  if(message.substring(0, config.cmdPrefix.length) === config.cmdPrefix){
+		var command = message.substring(config.cmdPrefix.length).split(' ');
     switch(command[0].toLowerCase()){
       case "ping":
         var ping = new Date();
@@ -54,25 +55,23 @@ bot.on('message', function(user, userID, channelID, message, rawEvent) {
         console.log(uptime);
         bot.sendMessage({to: channelID, message: "I am connected to:\n**"+servers+"** "+first+"\n**"+voice+"** "+second+"\n\nI have been online for **"+uptime.days+" day(s) "+uptime.hours+" hour(s) "+uptime.minutes+" minute(s) "+uptime.seconds+" second(s)**"});
         break;
-      /* ENABLE IF YOU WANT
       case "invite":
-        bot.sendMessage({to: channelID, message: "Use this link to invite me to your server "+bot.inviteURL+""});
+        if (config.allowInvite) bot.sendMessage({to: channelID, message: "Use this link to invite me to your server "+bot.inviteURL+""});
         break;
-      */
       case "help":
         var help = "```\nBot commands:";
-        help += "\n"+commandchar+"ping - pong! (Also tells the ping in ms)";
-        help += "\n"+commandchar+"status - Tells you what's the bot's current status";
-        /* help += "\n"+commandchar+"invite - Gives an invite link you can use to invite the bot to your own channel";*/
-        help += "\n"+commandchar+"summon - Makes the bot join the voice channel";
-        help += "\n"+commandchar+"dc - Disconnects the bot from the voice channel";
-        help += "\n"+commandchar+"play [URL / Search term] - Plays a song or adds it to the queue";
-        help += "\n"+commandchar+"stop - Stops playing and clears the queue";
-        help += "\n"+commandchar+"skip - Skips the current song and moves on to the next in queue";
-        help += "\n"+commandchar+"queue - Shows what's in the queue";
-        help += "\n"+commandchar+"clearqueue - Clears the queue, but keeps the current song playing";
-        help += "\n"+commandchar+"remove [song id] - Removes that specific song from queue";
-        help += "\n"+commandchar+"song - Shows what song is currently playing";
+        help += "\n"+config.cmdPrefix+"ping - pong! (Also tells the ping in ms)";
+        help += "\n"+config.cmdPrefix+"status - Tells you what's the bot's current status";
+        if(config.allowInvite) help += "\n"+config.cmdPrefix+"invite - Gives an invite link you can use to invite the bot to your own channel";
+        help += "\n"+config.cmdPrefix+"summon - Makes the bot join the voice channel";
+        help += "\n"+config.cmdPrefix+"dc - Disconnects the bot from the voice channel";
+        help += "\n"+config.cmdPrefix+"play [URL / Search term] - Plays a song or adds it to the queue";
+        help += "\n"+config.cmdPrefix+"stop - Stops playing and clears the queue";
+        help += "\n"+config.cmdPrefix+"skip - Skips the current song and moves on to the next in queue";
+        help += "\n"+config.cmdPrefix+"queue - Shows what's in the queue";
+        help += "\n"+config.cmdPrefix+"clear - Clears the queue, but keeps the current song playing";
+        help += "\n"+config.cmdPrefix+"remove [song id] - Removes that specific song from queue";
+        help += "\n"+config.cmdPrefix+"song - Shows what song is currently playing";
         help += "\nPlease note that the music bot downloads the songs before playing. Be patient.\n```";
         help += "\nhttps://github.com/tonkku107/discord-musicbot";
         bot.sendMessage({to: channelID, message: help});
@@ -113,6 +112,7 @@ bot.on('message', function(user, userID, channelID, message, rawEvent) {
                 bot.getAudioContext({channel: voice_channel[serverID], stereo: true}, function(stream){
                   ffmpegs[serverID] = playSong(file, serverID, channelID, stream);
                   bot.sendMessage({to: channelID, message: "Now Playing: **"+info.title+"**"});
+                  if (config.displaySongAsGame) bot.setPresence({game: info.title});
                   songQ[serverID] = {};
                   songQ[serverID].q = [];
                   songQ[serverID].now = info;
@@ -160,7 +160,7 @@ bot.on('message', function(user, userID, channelID, message, rawEvent) {
           bot.sendMessage({to: channelID, message: "There's nothing in the queue."});
         }
         break;
-      case "clearqueue":
+      case "clear":
         if(songQ[serverID] && songQ[serverID].q.length != 0){
           clearQueue(serverID, channelID, true);
         }
@@ -344,9 +344,12 @@ var processQueue = function(serverID, channelID){
     bot.getAudioContext({channel: voice_channel[serverID], stereo: true}, function(stream){
       ffmpegs[serverID] = playSong(file, serverID, channelID, stream);
       bot.sendMessage({to: channelID, message: "Now Playing: **"+next.title+"**"});
+      if (config.displaySongAsGame) bot.setPresence({game: next.title});
     });
   }else{
     songQ[serverID] = null;
+    if (config.displaySongAsGame && !config.showDefaultGame) bot.setPresence({game: null});
+    if (config.showDefaultGame) bot.setPresence({game: config.defaultGame.game, type: config.defaultGame.type, url: config.defaultGame.url});
   }
 }
 
