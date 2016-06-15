@@ -290,16 +290,12 @@ var resolveURL = function(args){
   }
 }
 
-var downloadSong = function(url, channelID, user, callback, directFile){
+var downloadSong = function(url, channelID, user, callback){
   function _download(url){
     var filename = generateUUID() + ".mp3";
     var songpath = path.join(__dirname + '/songs/', filename);
     var downloaded = 0;
-    if(directFile){
-      var video = youtubedl(url, [], {cwd: __dirname});
-    }else{
-      var video = youtubedl(url, ['-f', 'bestaudio'], {cwd: __dirname});
-    }
+    var video = youtubedl(url, ['-f', 'bestaudio/best'], {cwd: __dirname});
     var songInfo;
     bot.simulateTyping(channelID);
     video.on('info', function(info){
@@ -326,12 +322,9 @@ var downloadSong = function(url, channelID, user, callback, directFile){
       console.log(err);
       fs.unlink(songpath);
       var spot = err.toString().indexOf("ERROR: ");
-      if(err.toString().substring(spot).includes("ERROR: requested format not available")){
-        downloadSong(url, channelID, user, callback, true);
-      }else{
-        bot.sendMessage({to: channelID, message: "```"+err.toString().substring(spot)+"```"});
-      }
+      bot.sendMessage({to: channelID, message: "```"+err.toString().substring(spot)+"```"});
     });
+
     video.pipe(fs.createWriteStream(songpath));
     video.on('end', function(){
       console.log("Download Complete!");
