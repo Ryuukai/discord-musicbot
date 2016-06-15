@@ -24,7 +24,7 @@ bot.on('ready', function() {
 
 bot.on('message', function(user, userID, channelID, message, rawEvent) {
   var serverID = bot.serverFromChannel(channelID);
-  console.log(user+" ("+userID+"): "+message);
+  console.log(user+": "+message);
   if(message.substring(0, config.cmdPrefix.length) === config.cmdPrefix){
 		var command = message.substring(config.cmdPrefix.length).split(' ');
     switch(command[0].toLowerCase()){
@@ -191,6 +191,13 @@ bot.on('message', function(user, userID, channelID, message, rawEvent) {
   }
 });
 
+bot.on('disconnect', function(){
+  console.log("bot got disconnected, reconnecting in 10 seconds");
+  setTimeout(function(){
+    bot.connect();
+  }, 10000);
+});
+
 /* COMMAND FUNCTIONS */
 var deSplit = function(cmd){
 	if (typeof cmd[2] != 'undefined'){
@@ -284,55 +291,59 @@ var resolveURL = function(args){
 }
 
 var downloadSong = function(url, channelID, user, callback, directFile){
-  var filename = generateUUID() + ".mp3";
-  var songpath = path.join(__dirname + '/songs/', filename);
-  var downloaded = 0;
-  if(directFile){
-    var video = youtubedl(url, [], {cwd: __dirname});
-  }else{
-    var video = youtubedl(url, ['-f', 'bestaudio'], {cwd: __dirname});
-  }
-  var songInfo;
-  bot.simulateTyping(channelID);
-  video.on('info', function(info){
-    console.log('Download started');
-    console.log('filename: ' + info._filename);
-    console.log('size: ' + info.size);
-    bot.sendMessage({to: channelID, message: "Downloading `"+info.title+"`... "});
-    var simulateDownload = function(firstTime){
-      var typingTime = 2000;
-      if(firstTime) typingTime = 5;
-      bot.simulateTyping(channelID, function(err, res){
-        var timeout = setTimeout(function(){
-          if(!downloaded){
-            simulateDownload();
-          }
-        }, typingTime);
-      });
-    }
-    simulateDownload(true);
-    songInfo = info;
-  });
-
-  video.on('error', function(err){
-    console.log(err);
-    fs.unlink(songpath);
-    var spot = err.toString().indexOf("ERROR: ");
-    console.log("ERRRORTESTLOOKATME " + err.toString().substring(spot));
-    if(err.toString().substring(spot).includes("ERROR: requested format not available")){
-      downloadSong(url, channelID, user, callback, true);
+  function _download(url){
+    var filename = generateUUID() + ".mp3";
+    var songpath = path.join(__dirname + '/songs/', filename);
+    var downloaded = 0;
+    if(directFile){
+      var video = youtubedl(url, [], {cwd: __dirname});
     }else{
-      bot.sendMessage({to: channelID, message: "```"+err.toString().substring(spot)+"```"});
+      var video = youtubedl(url, ['-f', 'bestaudio'], {cwd: __dirname});
     }
-  });
-  video.pipe(fs.createWriteStream(songpath));
-  video.on('end', function(){
-    console.log("Download Complete!");
-    songInfo.filepath = songpath;
-    songInfo.user = user;
-    downloaded = 1;
-    callback(songpath, songInfo);
-  });
+    var songInfo;
+    bot.simulateTyping(channelID);
+    video.on('info', function(info){
+      console.log('Download started');
+      console.log('filename: ' + info._filename);
+      console.log('size: ' + info.size);
+      bot.sendMessage({to: channelID, message: "Downloading `"+info.title+"`... "});
+      var simulateDownload = function(firstTime){
+        var typingTime = 2000;
+        if(firstTime) typingTime = 5;
+        bot.simulateTyping(channelID, function(err, res){
+          var timeout = setTimeout(function(){
+            if(!downloaded){
+              simulateDownload();
+            }
+          }, typingTime);
+        });
+      }
+      simulateDownload(true);
+      songInfo = info;
+    });
+
+    video.on('error', function(err){
+      console.log(err);
+      fs.unlink(songpath);
+      var spot = err.toString().indexOf("ERROR: ");
+      if(err.toString().substring(spot).includes("ERROR: requested format not available")){
+        downloadSong(url, channelID, user, callback, true);
+      }else{
+        bot.sendMessage({to: channelID, message: "```"+err.toString().substring(spot)+"```"});
+      }
+    });
+    video.pipe(fs.createWriteStream(songpath));
+    video.on('end', function(){
+      console.log("Download Complete!");
+      songInfo.filepath = songpath;
+      songInfo.user = user;
+      downloaded = 1;
+      callback(songpath, songInfo);
+    });
+
+    video.on('next', _download);
+  }
+  _download(url);
 }
 
 var processQueue = function(serverID, channelID){
