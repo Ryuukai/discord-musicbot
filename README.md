@@ -11,6 +11,5 @@ A musicbot for discord made in node.js
 ## Getting started
 1. Get the requirements
 2. Edit the `config.js` file to your likings
-3. Create an empty folder called `songs`
-4. Open terminal/cmd and type `node bot`
-5. Enjoy some music :D (use the help command (!help by default) to see what commands you can use)
+3. Open terminal/cmd and type `node bot`
+4. Enjoy some music :D (use the help command (!help by default) to see what commands you can use)

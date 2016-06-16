@@ -19,6 +19,12 @@ var startup;
 bot.on('ready', function() {
     console.log("Logged in as: "+bot.username + " - (" + bot.id + ")");
     startup = new Date();
+    fs.mkdir('songs', 0777, function(err){
+      if(err){
+        if(err.code == "EEXIST") return;
+        else throw err;
+      }
+    });
     if (config.showDefaultGame) bot.setPresence({game: config.defaultGame.game, type: config.defaultGame.type, url: config.defaultGame.url});
 });
 
