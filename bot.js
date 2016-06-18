@@ -17,7 +17,7 @@ var songQ = {};
 var startup;
 
 bot.on('ready', function() {
-    console.log("Logged in as: "+bot.username + " - (" + bot.id + ")");
+    console.log("Logged in as: "+bot.username + " - " + bot.id);
     startup = new Date();
     fs.mkdir('songs', 0777, function(err){
       if(err){
@@ -156,8 +156,8 @@ bot.on('message', function(user, userID, channelID, message, rawEvent) {
           if(songQ[serverID].q.length != 0 && songQ[serverID] != null){
             var songcount = songQ[serverID].q.length;
             var origcount = songQ[serverID].q.length;
-            if(songcount > 10)
-              songcount = 10;
+            if(songcount > config.queueDisplaySize)
+              songcount = config.queueDisplaySize;
             var remaining = origcount - songcount;
             var queuestring = "Now Playing: **"+songQ[serverID].now.title+"**\n\nThere are "+origcount+" song(s) in queue:";
             for (i=1; i < songcount+1; i++){
@@ -174,6 +174,7 @@ bot.on('message', function(user, userID, channelID, message, rawEvent) {
         }
         break;
       case "clear":
+      case "clearqueue":
         if(songQ[serverID] && songQ[serverID].q.length != 0){
           clearQueue(serverID, channelID, true);
         }
