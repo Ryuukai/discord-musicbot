@@ -30,7 +30,13 @@ bot.on('ready', function() {
 
 bot.on('message', function(user, userID, channelID, message, rawEvent) {
   var serverID = bot.serverFromChannel(channelID);
-  console.log(user+": "+message);
+  try {
+    var serverName = bot.servers[serverID].name;
+    var channelName = bot.servers[serverID].channels[channelID].name;
+  }catch(e){
+    //console.log(e);
+  }
+  console.log("["+serverName+" / #"+channelName+"] "+user+": "+message);
   if(message.substring(0, config.cmdPrefix.length) === config.cmdPrefix){
 		var command = message.substring(config.cmdPrefix.length).split(' ');
     switch(command[0].toLowerCase()){
@@ -98,9 +104,10 @@ bot.on('message', function(user, userID, channelID, message, rawEvent) {
         }
         break;
       case "dc":
+      case "disconnect":
         if(voice_channel[serverID]){
           bot.leaveVoiceChannel(bot.servers[serverID].members[bot.id].voice_channel_id, function(){
-            voice_channel[serverID] = null;
+            delete voice_channel[serverID];
             stopSong(serverID, channelID, true);
             bot.sendMessage({to: channelID, message: "Disconnected from voice channel"});
           });
@@ -246,6 +253,7 @@ var playSong = function(file, serverID, channelID, stream){
     '-i', file,
     '-f', 's16le',
     '-ar', '48000',
+    '-af', 'volume='+config.volume,
     '-ac', '2',
     'pipe:1'
   ], {stdio: ['pipe', 'pipe', 'ignore']});
