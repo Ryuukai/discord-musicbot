@@ -13,6 +13,8 @@ var bot = new Discord.Client({
 var voice_channel = {};
 var ffmpegs = {};
 var songQ = {};
+var summoners = {};
+var votes = {};
 
 var startup;
 
@@ -76,7 +78,7 @@ bot.on('message', function(user, userID, channelID, message, rawEvent) {
         help += "\n"+config.cmdPrefix+"status - Tells you what's the bot's current status";
         if(config.allowInvite) help += "\n"+config.cmdPrefix+"invite - Gives an invite link you can use to invite the bot to your own channel";
         help += "\n"+config.cmdPrefix+"summon - Makes the bot join the voice channel";
-        help += "\n"+config.cmdPrefix+"dc - Disconnects the bot from the voice channel";
+        help += "\n"+config.cmdPrefix+"disconnect - Disconnects the bot from the voice channel";
         help += "\n"+config.cmdPrefix+"play [URL / Search term] - Plays a song or adds it to the queue";
         help += "\n"+config.cmdPrefix+"stop - Stops playing and clears the queue";
         help += "\n"+config.cmdPrefix+"skip - Skips the current song and moves on to the next in queue";
@@ -91,31 +93,41 @@ bot.on('message', function(user, userID, channelID, message, rawEvent) {
       /* MUSIC COMMANDS */
       case "summon":
         if (channelID in bot.directMessages) {
-          bot.sendMessage({to: channelID, message: "There's no voice channel in DMs"});
+          bot.sendMessage({to: channelID, message: ":x: There's no voice channel in DMs"});
         }else{
+          if(voice_channel[serverID]){
+            return;
+          }
           voice_channel_id = bot.servers[serverID].members[userID].voice_channel_id;
           if(voice_channel_id){
             bot.joinVoiceChannel(voice_channel_id, function(){
+              summoners[serverID] = userID;
               voice_channel[serverID] = voice_channel_id;
+              bot.sendMessage({to: channelID, message: ":white_check_mark: Ready to play!"});
             });
           }else{
-            bot.sendMessage({to: channelID, message: "You are not in a voice channel"});
+            bot.sendMessage({to: channelID, message: ":x: You are not in a voice channel"});
           }
         }
         break;
       case "dc":
       case "disconnect":
+      case "leave":
+        if (voice_channel[serverID] && summoners[serverID] && bot.channels[voice_channel[serverID]].members && !bot.channels[voice_channel[serverID]].members[summoners[serverID]] && config.limitToSummoner) {
+          return dcVoice(serverID, channelID, true);
+        }
         if(voice_channel[serverID]){
-          bot.leaveVoiceChannel(bot.servers[serverID].members[bot.id].voice_channel_id, function(){
-            delete voice_channel[serverID];
-            stopSong(serverID, channelID, true);
-            bot.sendMessage({to: channelID, message: "Disconnected from voice channel"});
-          });
+          if ((config.limitToSummoner && summoners[serverID] && summoners[serverID] == userID || userID == config.ownerID) || !config.limitToSummoner) {
+            dcVoice(serverID, channelID, false);
+          }else{
+            bot.sendMessage({to: channelID, message: ":no_entry_sign: Only person who summoned me can make me leave."});
+          }
         }else{
-          bot.sendMessage({to: channelID, message: "I am not in a voice channel"});
+          bot.sendMessage({to: channelID, message: ":x: I am not in a voice channel"});
         }
         break;
       case "play":
+      case "add":
         var args = deSplit(command)[1];
         if(args){
           if(voice_channel[serverID]){
@@ -124,7 +136,7 @@ bot.on('message', function(user, userID, channelID, message, rawEvent) {
               if(!songQ[serverID]){
                 bot.getAudioContext({channel: voice_channel[serverID], stereo: true}, function(stream){
                   ffmpegs[serverID] = playSong(file, serverID, channelID, stream);
-                  bot.sendMessage({to: channelID, message: "Now Playing: **"+info.title+"**"});
+                  bot.sendMessage({to: channelID, message: ":notes: Now Playing: **"+info.title+"**"});
                   if (config.displaySongAsGame) bot.setPresence({game: info.title});
                   songQ[serverID] = {};
                   songQ[serverID].q = [];
@@ -132,73 +144,133 @@ bot.on('message', function(user, userID, channelID, message, rawEvent) {
                 });
               }else{
                 songQ[serverID].q.push(info);
-                bot.sendMessage({to: channelID, message: "`"+info.title+"` Added to queue! Position: "+songQ[serverID].q.length});
+                bot.sendMessage({to: channelID, message: ":white_check_mark: `"+info.title+"` Added to queue! Position: #"+songQ[serverID].q.length});
               }
             });
           }
         }else{
-          bot.sendMessage({to: channelID, message: "You didn't specify any song"});
+          bot.sendMessage({to: channelID, message: ":x: Please specify a song or an URL"});
         }
         break;
       case "stop":
+        if (voice_channel[serverID] && summoners[serverID] && bot.channels[voice_channel[serverID]].members && !bot.channels[voice_channel[serverID]].members[summoners[serverID]] && config.limitToSummoner) {
+          return dcVoice(serverID, channelID, true);
+        }
         if(voice_channel[serverID]){
-          if (voice_channel[serverID]) stopSong(serverID, channelID, true);
+          if ((config.limitToSummoner && summoners[serverID] && summoners[serverID] == userID || userID == config.ownerID) || !config.limitToSummoner) {
+            stopSong(serverID, channelID, true, true);
+          }else{
+            bot.sendMessage({to: channelID, message: ":no_entry_sign: Only person who added me can stop."});
+          }
         }
         break;
       case "skip":
-        if(voice_channel[serverID]){
-          if (voice_channel[serverID]) stopSong(serverID, channelID, false);
+        if(voice_channel[serverID] && bot.servers[serverID].members[userID].voice_channel_id == voice_channel[serverID]){
+          var usersAmount = Object.keys(bot.channels[voice_channel[serverID]].members).length;
+          if(!(config.limitToSummoner && summoners[serverID] && summoners[serverID] == userID || userID == config.ownerID) && config.voteSkip){
+            if(votes[serverID]){
+              if(votes[serverID].includes(userID)){
+                if(calculateVotes(usersAmount) <= votes[serverID].length){
+                  stopSong(serverID, channelID, false);
+                  votes[serverID] = [];
+                }else{
+                  bot.sendMessage({to: channelID, message: ":warning: Your vote is already there, we need " + (calculateVotes(usersAmount) - votes[serverID].length) + " more."});
+                }
+              }else{
+                votes[serverID].push(userID);
+                if(calculateVotes(usersAmount) <= votes[serverID].length){
+                  stopSong(serverID, channelID, false);
+                  votes[serverID] = [];
+                }else{
+                  bot.sendMessage({to: channelID, message: ":white_check_mark: Your vote has been added, we need " + (calculateVotes(usersAmount) - votes[serverID].length) + " more."});
+                }
+              }
+            }else{
+              votes[serverID] = [];
+              votes[serverID].push(userID);
+              if (calculateVotes(usersAmount) <= votes[serverID].length) {
+                stopSong(serverID, channelID, false);
+                votes[serverID] = [];
+              }else{
+                bot.sendMessage({to: channelID, message: ":white_check_mark: Your vote has been added, we need " + (calculateVotes(usersAmount) - votes[serverID].length) + " more."});
+              }
+            }
+          }else{
+            stopSong(serverID, channelID, false);
+          }
         }
         break;
       case "queue":
       case "playlist":
-        if(voice_channel[serverID] && (songQ[serverID].q.length != 0 || songQ[serverID].now != null)){
+      case "list":
+        if(voice_channel[serverID] && songQ[serverID] && (songQ[serverID].q.length != 0 || songQ[serverID].now != null)){
           if(songQ[serverID].q.length != 0 && songQ[serverID] != null){
             var songcount = songQ[serverID].q.length;
             var origcount = songQ[serverID].q.length;
             if(songcount > config.queueDisplaySize)
               songcount = config.queueDisplaySize;
             var remaining = origcount - songcount;
-            var queuestring = "Now Playing: **"+songQ[serverID].now.title+"**\n\nThere are "+origcount+" song(s) in queue:";
+            if(origcount == 1){
+              var queuestring = "Now Playing: **"+songQ[serverID].now.title+"**\n\nThere is just "+origcount+" song in queue:";
+            }else{
+              var queuestring = "Now Playing: **"+songQ[serverID].now.title+"**\n\nThere are "+origcount+" songs in queue:";
+            }
             for (i=1; i < songcount+1; i++){
-              queuestring += "\n`"+i+".` "+songQ[serverID].q[i-1].title+" - queued by "+songQ[serverID].q[i-1].user.user;
+              queuestring += "\n`"+i+".` "+songQ[serverID].q[i-1].title+" - queued by @**"+songQ[serverID].q[i-1].user.user+"**";
             }
             if(remaining > 0)
               queuestring += "\n+"+remaining+" more";
             bot.sendMessage({to: channelID, message: queuestring});
           }else if(songQ[serverID].now != null){
-            bot.sendMessage({to: channelID, message: "Now Playing: **"+songQ[serverID].now.title+"**\nNothing else in queue."});
+            bot.sendMessage({to: channelID, message: "Now Playing: **"+songQ[serverID].now.title+"**\n\nQueue is empty."});
           }
         }else{
-          bot.sendMessage({to: channelID, message: "There's nothing in the queue."});
+          bot.sendMessage({to: channelID, message: ":x: There's nothing in the queue."});
         }
         break;
       case "clear":
       case "clearqueue":
+        if (voice_channel[serverID] && summoners[serverID] && bot.channels[voice_channel[serverID]].members && !bot.channels[voice_channel[serverID]].members[summoners[serverID]] && config.limitToSummoner) {
+          return dcVoice(serverID, channelID, true);
+        }
         if(songQ[serverID] && songQ[serverID].q.length != 0){
-          clearQueue(serverID, channelID, true);
+          if ((config.limitToSummoner && summoners[serverID] && summoners[serverID] == userID || userID == config.ownerID) || !config.limitToSummoner) {
+            clearQueue(serverID, channelID, true);
+          }else{
+            bot.sendMessage({to: channelID, message: ":x: Only person who added me can clear the queue."});
+          }
         }
         break;
       case "remove":
-        command[1] = parseInt(command[1]);
-        if(Number.isInteger(command[1])){
-          if(songQ[serverID] && songQ[serverID].q[command[1]-1]){
-            var removed = songQ[serverID].q[command[1]-1];
-            fs.unlink(removed.filepath);
-            songQ[serverID].q.splice(command[1]-1, 1);
-            bot.sendMessage({to: channelID, message: "Removed `"+removed.title+"` from the queue"});
+        if (voice_channel[serverID] && summoners[serverID] && bot.channels[voice_channel[serverID]].members && !bot.channels[voice_channel[serverID]].members[summoners[serverID]] && config.limitToSummoner) {
+          return dcVoice(serverID, channelID, true);
+        }
+        if ((config.limitToSummoner && summoners[serverID] && summoners[serverID] == userID || userID == config.ownerID) || !config.limitToSummoner) {
+          command[1] = parseInt(command[1]);
+          if(Number.isInteger(command[1])){
+            if(songQ[serverID] && songQ[serverID].q[command[1]-1]){
+              var removed = songQ[serverID].q[command[1]-1];
+              fs.unlink(removed.filepath);
+              songQ[serverID].q.splice(command[1]-1, 1);
+              bot.sendMessage({to: channelID, message: ":white_check_mark: Removed `"+removed.title+"` from the queue"});
+            }else{
+              bot.sendMessage({to: channelID, message: ":x: A song with that index was not found"});
+            }
           }else{
-            bot.sendMessage({to: channelID, message: "A song with that index was not found"});
+            bot.sendMessage({to: channelID, message: ":x: Please specify index number of a song"});
           }
         }else{
-          bot.sendMessage({to: channelID, message: "Invalid argument or none given. Expecting index number"});
+          bot.sendMessage({to: channelID, message: ":x: Only person who added me can remove queued songs."});
         }
         break;
       case "song":
+      case "currentsong":
+      case "current":
+      case "now":
         if(songQ[serverID] && songQ[serverID].now){
-          bot.sendMessage({to: channelID, message: "Now Playing: **"+songQ[serverID].now.title+"**"});
+          bot.sendMessage({to: channelID, message: ":notes: Now Playing: **"+songQ[serverID].now.title+"**"});
         }else{
-          bot.sendMessage({to: channelID, message: "Nothing is playing"});
+          bot.sendMessage({to: channelID, message: ":x: Nothing is playing"});
         }
         break;
     }
@@ -215,11 +287,20 @@ bot.on('disconnect', function(){
 /* COMMAND FUNCTIONS */
 var deSplit = function(cmd){
 	if (typeof cmd[2] != 'undefined'){
-			for(var i = 2; i < cmd.length; i++){
-				cmd[1] = cmd[1] + ' ' + cmd[i];
-			}
+		for(var i = 2; i < cmd.length; i++){
+			cmd[1] = cmd[1] + ' ' + cmd[i];
 		}
+	}
 	return cmd;
+}
+
+var sendSelfDestructMessage = function(channelID, message, delay){
+  bot.sendMessage({to: channelID, message: message}, function(err, res){
+    if(err) return console.log(err);
+    var timeout = setTimeout(function(){
+      bot.deleteMessage({channel: res.channel_id, messageID: res.id});
+    }, delay);
+  });
 }
 
 function generateUUID() {
@@ -266,23 +347,24 @@ var playSong = function(file, serverID, channelID, stream){
 
   ffmpeg.stdout.once('end', function(){
     console.log("Playback ended");
-    songQ[serverID].now = null;
     fs.unlink(file);
+    delete songQ[serverID].now;
     processQueue(serverID, channelID);
   });
 
   return ffmpeg;
 }
 
-var stopSong = function(serverID, channelID, clearQ){
+var stopSong = function(serverID, channelID, clearQ, announce){
   var ffmpeg = ffmpegs[serverID];
+  delete votes[serverID];
   if(clearQ){
     clearQueue(serverID, channelID, false);
-      bot.sendMessage({to: channelID, message: "Queue cleared and song stopped!"});
+    if (announce) bot.sendMessage({to: channelID, message: ":white_check_mark: Queue cleared and song stopped!"});
   }
   if(ffmpeg){
     ffmpeg.kill();
-    if (!clearQ) bot.sendMessage({to: channelID, message: "Song skipped!"});
+    if (!clearQ) bot.sendMessage({to: channelID, message: ":white_check_mark: Song skipped!"});
   }
 }
 
@@ -292,8 +374,21 @@ var clearQueue = function(serverID, channelID, announce){
       fs.unlink(v.filepath);
     });
     songQ[serverID].q = [];
-    if(announce) bot.sendMessage({to: channelID, message: "Queue cleared!"});
+    if(announce) bot.sendMessage({to: channelID, message: ":white_check_mark: Queue cleared!"});
   }
+}
+
+var dcVoice = function(serverID, channelID, becauseLeave){
+  stopSong(serverID, channelID, true);
+  bot.leaveVoiceChannel(bot.servers[serverID].members[bot.id].voice_channel_id, function(){
+    delete voice_channel[serverID];
+    if(songQ[serverID] && songQ[serverID].now) fs.unlink(songQ[serverID].now.filepath);
+    delete songQ[serverID];
+    delete votes[serverID];
+    delete summoners[serverID];
+    if(becauseLeave) bot.sendMessage({to: channelID, message: ":no_entry_sign: Left from voice channel because summoner has left."});
+    else bot.sendMessage({to: channelID, message: ":white_check_mark: Disconnected"});
+  });
 }
 
 var resolveURL = function(args){
@@ -317,7 +412,7 @@ var downloadSong = function(url, channelID, user, callback){
       console.log('Download started');
       console.log('filename: ' + info._filename);
       console.log('size: ' + info.size);
-      bot.sendMessage({to: channelID, message: "Downloading `"+info.title+"`... "});
+      sendSelfDestructMessage(channelID, ":arrow_down: Downloading `"+info.title+"`... ", 3500);
       var simulateDownload = function(firstTime){
         var typingTime = 2000;
         if(firstTime) typingTime = 5;
@@ -362,14 +457,28 @@ var processQueue = function(serverID, channelID){
     var file = next.filepath;
     bot.getAudioContext({channel: voice_channel[serverID], stereo: true}, function(stream){
       ffmpegs[serverID] = playSong(file, serverID, channelID, stream);
-      bot.sendMessage({to: channelID, message: "Now Playing: **"+next.title+"**"});
+      bot.sendMessage({to: channelID, message: ":notes: Now Playing: **"+next.title+"**"});
       if (config.displaySongAsGame) bot.setPresence({game: next.title});
     });
   }else{
-    songQ[serverID] = null;
+    delete songQ[serverID];
     if (config.displaySongAsGame && !config.showDefaultGame) bot.setPresence({game: null});
     if (config.showDefaultGame) bot.setPresence({game: config.defaultGame.game, type: config.defaultGame.type, url: config.defaultGame.url});
   }
+}
+
+var calculateVotes = function (users) {
+    if (users == 1 || users == 2) {
+        return 0
+    } else if (users == 3 || users == 4) {
+        return 2
+    } else if (users > 7) {
+        return 5
+    } else if (users > 4) {
+        return 3
+    } else {
+        return 6
+    }
 }
 
 /* EXIT HANDLING */
