@@ -12,7 +12,7 @@ var config = {
   displaySongAsGame: true, //Boolean. If true, bot will show the current song at its status. Not recommended if the bot is in multiple servers. DEFAULT: true
   showDefaultGame: false, //Boolean. If true and nothing else is playing, the bot's status will be the default game configurable below. DEFAULT: false
   defaultGame: {
-    game: "", //The game name
+    name: "", //The game name
     type: 0, //0 = "Playing", 1 = "Streaming"
     url: "" //Required for stream mode. Needs to be a valid twitch url.
   },
