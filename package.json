@@ -18,6 +18,7 @@
   "homepage": "https://github.com/tonkku107/discord-musicbot#readme",
   "dependencies": {
     "discordie": "^0.7.4",
+    "m3u8": "0.0.7",
     "request": "^2.74.0",
     "youtube-dl": "^1.11.1"
   }
