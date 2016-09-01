@@ -46,7 +46,7 @@ client.Dispatcher.on("MESSAGE_CREATE", e => {
     console.log(`[${e.message.guild.name} / #${e.message.channel.name}] ${e.message.author.username}: ${e.message.content}`);
   }
 
-  if((config.cmdPrefix != "" && e.message.content.substring(0, config.cmdPrefix.length) === config.cmdPrefix) || (e.message.content.substring(0, 2) == "<@" && e.message.content.substring(0, 22).replace(/\D/g, "") == client.User.id) && e.message.author.id != client.User.id && !e.message.author.bot && loaded){
+  if((config.cmdPrefix != "" && e.message.content.substring(0, config.cmdPrefix.length) === config.cmdPrefix) || (e.message.content.substring(0, 2) == "<@" && e.message.content.substring(0, 22).replace(/\D/g, "") == client.User.id) && e.message.author.id != client.User.id && !e.message.author.bot){
     if (config.cmdPrefix != "" && e.message.content.substring(0, config.cmdPrefix.length) === config.cmdPrefix) var command = e.message.content.substring(config.cmdPrefix.length).split(' ');
     else var command = e.message.content.substring(e.message.content.indexOf('>')+2).split(' ');
 
@@ -203,40 +203,40 @@ client.Dispatcher.on("MESSAGE_CREATE", e => {
             }
           }
           break;
-          case "queue":
-          case "playlist":
-          case "list":
-            if(client.User.getVoiceChannel(e.message.guild) && music.songQ[e.message.guild.id] && music.songQ[e.message.guild.id].q.length != 0 || music.songQ[e.message.guild.id].now){
-              if(music.songQ[e.message.guild.id] && music.songQ[e.message.guild.id].q.length != 0){
-                var songcount = music.songQ[e.message.guild.id].q.length;
-                var origcount = music.songQ[e.message.guild.id].q.length;
-                if(songcount > config.queueDisplaySize)
-                  songcount = config.queueDisplaySize;
-                var remaining = origcount - songcount;
-                if(music.songQ[e.message.guild.id].now.protocol != "m3u8"){
-                  var queuestring = "Now Playing: **"+music.songQ[e.message.guild.id].now.title+"**";
-                }else{
-                  var queuestring = "Now Playing: **"+music.songQ[e.message.guild.id].now.title+"** `[STREAM]`";
-                }
-                if(origcount == 1){
-                  queuestring += "\n\nThere is just "+origcount+" song in queue:";
-                }else{
-                  queuestring += "\n\nThere are "+origcount+" songs in queue:";
-                }
-                for (i=1; i < songcount+1; i++){
-                  queuestring += "\n`"+i+".` "+music.songQ[e.message.guild.id].q[i-1].title+" - queued by @**"+music.songQ[e.message.guild.id].q[i-1].user.username+"**";
-                }
-                if(remaining > 0)
-                  queuestring += "\n+"+remaining+" more";
-                e.message.channel.sendMessage(queuestring);
-              }else if(music.songQ[e.message.guild.id].now){
-                if(music.songQ[e.message.guild.id].now.protocol != "m3u8") e.message.channel.sendMessage(`Now Playing: **${music.songQ[e.message.guild.id].now.title}**\n\nQueue is empty.`);
-                else e.message.channel.sendMessage(`Now Playing: **${music.songQ[e.message.guild.id].now.title} \`[STREAM]\`**\n\nQueue is empty.`);
+        case "queue":
+        case "playlist":
+        case "list":
+          if(client.User.getVoiceChannel(e.message.guild)){
+            if(music.songQ[e.message.guild.id] && music.songQ[e.message.guild.id].q.length != 0){
+              var songcount = music.songQ[e.message.guild.id].q.length;
+              var origcount = music.songQ[e.message.guild.id].q.length;
+              if(songcount > config.queueDisplaySize)
+                songcount = config.queueDisplaySize;
+              var remaining = origcount - songcount;
+              if(music.songQ[e.message.guild.id].now.protocol != "m3u8"){
+                var queuestring = "Now Playing: **"+music.songQ[e.message.guild.id].now.title+"**";
               }else{
-                e.message.channel.sendMessage("❌ There's nothing in the queue.");
+                var queuestring = "Now Playing: **"+music.songQ[e.message.guild.id].now.title+"** `[STREAM]`";
               }
+              if(origcount == 1){
+                queuestring += "\n\nThere is just "+origcount+" song in queue:";
+              }else{
+                queuestring += "\n\nThere are "+origcount+" songs in queue:";
+              }
+              for (i=1; i < songcount+1; i++){
+                queuestring += "\n`"+i+".` "+music.songQ[e.message.guild.id].q[i-1].title+" - queued by @**"+music.songQ[e.message.guild.id].q[i-1].user.username+"**";
+              }
+              if(remaining > 0)
+                queuestring += "\n+"+remaining+" more";
+              e.message.channel.sendMessage(queuestring);
+            }else if(music.songQ[e.message.guild.id] && music.songQ[e.message.guild.id].now){
+              if(music.songQ[e.message.guild.id].now.protocol != "m3u8") e.message.channel.sendMessage(`Now Playing: **${music.songQ[e.message.guild.id].now.title}**\n\nQueue is empty.`);
+              else e.message.channel.sendMessage(`Now Playing: **${music.songQ[e.message.guild.id].now.title} \`[STREAM]\`**\n\nQueue is empty.`);
+            }else{
+              e.message.channel.sendMessage("❌ There's nothing in the queue.");
             }
-            break;
+          }
+          break;
         case "clear":
         case "clearqueue":
           if(client.User.getVoiceChannel(e.message.guild) && (config.limitToSummoner && (!client.User.getVoiceChannel(e.message.guild).members.find(obj => obj.id == music.summoners[e.message.guild.id]) || e.message.author.id == music.summoners[e.message.guild.id] || e.message.author.id == config.ownerID)) || !config.limitToSummoner) {
