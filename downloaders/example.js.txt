@@ -1,0 +1,18 @@
+const request = require('request');
+
+module.exports = {
+  prefix: "downloadername",
+  urlReg: /(http|https):\/\/(www.)?example.com\/[a-zA-Z0-9]+/i,
+  formatURL: function(url){
+    // do things
+    return url; // ":downloadername:..."
+  },
+  download: function(url, extras, callback){
+    if(url[0].startsWith(':monstercat:')){
+      // do stuff
+      callback([/*Array of track objects*/]);
+    }else{
+      return callback(new Error("Invalid URL"))
+    }
+  }
+}

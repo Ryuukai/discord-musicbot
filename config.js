@@ -1,5 +1,6 @@
 var config = {
   token: "", //Insert your bot token here, you can get this from https://discordapp.com/developers/applications/me
+  twitchClientId: "", //Because twitch is a dick and requires it now (https://www.twitch.tv/settings/connections)
   ownerID: "", //Your (bot owner's) id for extra access. Can be blank for no owner.
   cmdPrefix: "!", //The character or string commands must start with. DEFAULT: "!"
   allowInvite: false, //Boolean. If true, the !invite command is allowed, which sends an oauth link to add the bot to different servers. DEFAULT: false

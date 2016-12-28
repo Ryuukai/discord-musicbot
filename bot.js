@@ -19,16 +19,22 @@ var music = {
   songQ: {},
   streams: {}
 }
+var downloaders = [];
 
 client.Dispatcher.on("GATEWAY_READY", e => {
   console.log(`Connected as: ${client.User.username} - ${client.User.id}`);
   startup = new Date();
   if(config.showDefaultGame) client.User.setGame(config.defaultGame);
 
-  request('https://discordapp.com/api/oauth2/applications/@me?token='+config.token, (err, res, body) => {
-    body = JSON.parse(body);
-    inviteURL = "https://discordapp.com/oauth2/authorize?client_id="+body.id+"&scope=bot&permissions="+permissions;
-    console.log("Invite URL: "+inviteURL);
+  loadDownloaders();
+
+  client.User.getApplication().then(app => {
+    inviteURL = "https://discordapp.com/oauth2/authorize?client_id="+app.id+"&scope=bot&permissions="+permissions;
+    console.log("Invite URL:" + inviteURL);
+  }).catch(e => {
+    console.log(e);
+    inviteURL = "https://discordapp.com/oauth2/authorize?client_id="+client.User.id+"&scope=bot&permissions="+permissions;
+    console.log("Invite URL:" + inviteURL);
   });
 
   fs.mkdir('songs', 0777, function(err){
@@ -62,15 +68,19 @@ client.Dispatcher.on("MESSAGE_CREATE", e => {
         case "status":
           const servers = client.Guilds.length || 0;
           const voice = client.VoiceConnections.length || 0;
-          if(servers == 1) var first = "server";
-          else var first = "servers";
-
-          if(voice == 1) var second = "voice channel";
-          else var second = "voice channels";
 
           const now = new Date();
-          const uptime = getTimeInBetween(now, startup);
-          e.message.channel.sendMessage(`I am connected to:\n**${servers}** ${first}\n**${voice}** ${second}\n\nI have been online for **${uptime.days} day(s) ${uptime.hours} hour(s) ${uptime.minutes} minute(s) ${uptime.seconds} second(s)**`);
+          const uptime = getTimeInBetween(now, other.startup);
+          e.message.channel.sendMessage("", false, {
+            color: null, //change if you feel like it
+            author: {name: client.User.username, icon_url: client.User.avatarURL, url: other.inviteURL},
+            title: "Bot status",
+            fields:[
+              {name:"I am connected to", value:`**${servers}** ${servers == 1 ? "server" : "servers"}\n**${voice}** ${voice == 1 ? "voice channel" : "voice channels"}`},
+              {name: "I have been online for", value:`${uptime.days}d ${uptime.hours}h ${uptime.minutes}m ${uptime.seconds}s`},
+            ],
+            timestamp: now,
+          });
           break;
         case "invite":
           if (config.allowInvite) e.message.channel.sendMessage("Use this link to invite me to your server: \n"+inviteURL);
@@ -118,46 +128,46 @@ client.Dispatcher.on("MESSAGE_CREATE", e => {
             e.message.channel.sendMessage("🚫 Only the person who added me can make me leave");
           }
           break;
-          case "play":
-          case "add":
-            var args = command.splice(1).join(' ');
-            if(args) {
-              if(!client.User.getVoiceChannel(e.message.guild)){
-                const channel = e.message.author.getVoiceChannel(e.message.guild);
-                if(channel){
-                  channel.join(false, false).then(info => {
-                    music.summoners[e.message.guild.id] = e.message.author.id;
-                  }, err => {
-                    e.message.channel.sendMessage(`❌ Error \`${err.response.body.message}\``);
-                  });
-                }else{
-                  return e.message.channel.sendMessage("❌ You are not in a voice channel");
-                }
+        case "play":
+        case "add":
+          var args = command.splice(1).join(' ');
+          if(args) {
+            if(!client.User.getVoiceChannel(e.message.guild)){
+              const channel = e.message.author.getVoiceChannel(e.message.guild);
+              if(channel){
+                channel.join(false, false).then(info => {
+                  music.summoners[e.message.guild.id] = e.message.author.id;
+                }, err => {
+                  e.message.channel.sendMessage(`❌ Error \`${err.response.body.message}\``);
+                });
+              }else{
+                return e.message.channel.sendMessage("❌ You are not in a voice channel");
               }
-              url = resolveURL(args);
-              downloadSong(url, e.message.author, e.message.channel, info => {
-                if(!music.songQ[e.message.guild.id]){
-                  if(info.protocol != "m3u8"){
-                    music.streams[e.message.guild.id] = playSong(info.filepath, e.message.channel, client, config);
-                    e.message.channel.sendMessage(`🎶 Now Playing: **${info.title}**`);
-                  }
-                  else{
-                    music.streams[e.message.guild.id] = playSong(info.url, e.message.channel, client, config);
-                    e.message.channel.sendMessage(`🎶 Now Playing: **${info.title}** \`[STREAM]\``);
-                  }
-                  music.songQ[e.message.guild.id] = {};
-                  music.songQ[e.message.guild.id].q = [];
-                  music.songQ[e.message.guild.id].now = info;
-                }else{
-                  if(info.protocol == "m3u8") return e.message.channel.sendMessage("❌ Streams must be added to an empty queue");
-                  music.songQ[e.message.guild.id].q.push(info);
-                  e.message.channel.sendMessage(`✅ \`${info.title}\` Added to queue! Position: #${music.songQ[e.message.guild.id].q.length}`);
-                }
-              });
-            }else{
-              e.message.channel.sendMessage("❌ Please specify a song or an URL");
             }
-            break;
+            url = resolveURL(args);
+            downloadSong(url, e.message.author, e.message.channel, info => {
+              if(!music.songQ[e.message.guild.id]){
+                if(info.protocol != "m3u8"){
+                  music.streams[e.message.guild.id] = playSong(info.filepath, e.message.channel, client, config);
+                  e.message.channel.sendMessage(`🎶 Now Playing: **${info.title}**`);
+                }
+                else{
+                  music.streams[e.message.guild.id] = playSong(info.url, e.message.channel, client, config);
+                  e.message.channel.sendMessage(`🎶 Now Playing: **${info.title}** \`[STREAM]\``);
+                }
+                music.songQ[e.message.guild.id] = {};
+                music.songQ[e.message.guild.id].q = [];
+                music.songQ[e.message.guild.id].now = info;
+              }else{
+                if(info.protocol == "m3u8") return e.message.channel.sendMessage("❌ Streams must be added to an empty queue");
+                music.songQ[e.message.guild.id].q.push(info);
+                e.message.channel.sendMessage(`✅ \`${info.title}\` Added to queue! Position: #${music.songQ[e.message.guild.id].q.length}`);
+              }
+            });
+          }else{
+            e.message.channel.sendMessage("❌ Please specify a song or an URL");
+          }
+          break;
         case "stop":
           if(client.User.getVoiceChannel(e.message.guild) && (config.limitToSummoner && (!client.User.getVoiceChannel(e.message.guild).members.find(obj => obj.id == music.summoners[e.message.guild.id]) || e.message.author.id == music.summoners[e.message.guild.id] || e.message.author.id == config.ownerID)) || !config.limitToSummoner) {
             stopSong(e.message.channel, true, true);
@@ -176,7 +186,6 @@ client.Dispatcher.on("MESSAGE_CREATE", e => {
                 if(music.votes[e.message.guild.id].includes(e.message.author.id)){
                   if(calculateVotes(usersAmount) <= votes.length){
                     stopSong(e.message.channel, false, false);
-                    votes = [];
                   }else{
                     e.message.channel.sendMessage(`⚠ Your vote is already there, we need ${calculateVotes(usersAmount) - votes.length} more.`);
                   }
@@ -184,7 +193,6 @@ client.Dispatcher.on("MESSAGE_CREATE", e => {
                   votes.push(e.message.author.id);
                   if(calculateVotes(usersAmount) <= votes.length){
                     stopSong(e.message.channel, false, false);
-                    votes = [];
                   }else{
                     e.message.channel.sendMessage(`✅ Your vote has been added, we need ${calculateVotes(usersAmount) - votes.length} more.`);
                   }
@@ -195,7 +203,6 @@ client.Dispatcher.on("MESSAGE_CREATE", e => {
                 var votes = music.votes[e.message.guild.id];
                 if(calculateVotes(usersAmount) <= votes.length){
                   stopSong(e.message.channel, false, false);
-                  votes = [];
                 }else{
                   e.message.channel.sendMessage(`✅ Your vote has been added, we need ${calculateVotes(usersAmount) - votes.length} more.`);
                 }
@@ -250,7 +257,7 @@ client.Dispatcher.on("MESSAGE_CREATE", e => {
             if(parseInt(command[1])){
               if(music.songQ[e.message.guild.id] && music.songQ[e.message.guild.id].q[command[1]-1]){
                 var removed = music.songQ[e.message.guild.id].q[command[1]-1];
-                fs.unlink(removed.filepath);
+                fs.unlink(removed.filepath, (err) => {if(err)console.log(err);});
                 music.songQ[e.message.guild.id].q.splice(command[1]-1, 1);
                 e.message.channel.sendMessage(`✅ Removed \`${removed.title}\` from the queue`);
               }else{
@@ -288,7 +295,7 @@ client.Dispatcher.on("DISCONNECTED", e => {
 });
 
 client.Dispatcher.on("VOICE_DISCONNECTED", event => {
-  if(music.songQ[event.voiceConnection.guild.id]){
+  if(event.voiceConnection.guild.id && music.songQ[event.voiceConnection.guild.id]){
     function reconnect(channel) {
       channel.join().catch(err => setTimeout(reconnect(channel), 5000));
     }
@@ -304,6 +311,17 @@ client.Dispatcher.on("VOICE_DISCONNECTED", event => {
     setTimeout(() => reconnect(channel), 5000);
   }
 });
+
+const loadDownloaders = () => {
+  fs.readdir('downloaders', (err, files) => {
+    files.forEach((file, index) => {
+      if(file.endsWith('.js')){
+        downloaders.push(require(`./downloaders/${file}`));
+        console.log(`[Music Downloader] ${file} loaded`);
+      }
+    });
+  });
+};
 
 const sendSelfDestructMessage = (channel, message, delay) => {
   channel.sendMessage(message).then(msg => {
@@ -328,7 +346,7 @@ const stopSong = (channel, clearQ, announce) => {
 const clearQueue = (channel, announce) => {
   if(music.songQ[channel.guild.id]){
     music.songQ[channel.guild.id].q.forEach(v => {
-      fs.unlink(v.filepath);
+      fs.unlink(v.filepath, (err) => {if(err)console.log(err);});
     });
     music.songQ[channel.guild.id].q = [];
     if(announce) channel.sendMessage("✅ Queue cleared!");
@@ -338,7 +356,7 @@ const clearQueue = (channel, announce) => {
 const dcVoice = (channel, e) => {
   stopSong(channel, true);
   channel.leave();
-  if(music.songQ[channel.guild.id] && music.songQ[channel.guild.id].now) fs.unlink(music.songQ[channel.guild.id].now.filepath);
+  if(music.songQ[channel.guild.id] && music.songQ[channel.guild.id].now) fs.unlink(music.songQ[channel.guild.id].now.filepath, (err) => {if(err)console.log(err);});
   delete music.songQ[channel.guild.id];
   delete music.votes[channel.guild.id];
   delete music.summoners[channel.guild.id];
@@ -347,14 +365,20 @@ const dcVoice = (channel, e) => {
 
 const resolveURL = (args) => {
   var regexp = /(http|https):\/\/(\w+:{0,1}\w*@)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-\/]))?/
-  var twitchreg = /(http|https):\/\/(www.)?twitch.tv\/[a-zA-Z0-9]+/i
-  if(twitchreg.test(args)){
-    return "twitch:"+args.substring(args.indexOf("tv/")+3);
+  args = args.split(' ');
+  if(args[0].startsWith(":")){
+    return args;
   }
-  if(regexp.test(args)){
+  for(dler of downloaders){
+    if(dler.urlReg.test(args[0])){
+      return dler.formatURL(args);
+    }
+  }
+  if(regexp.test(args[0])){
     return args;
   }else{
-    return "ytsearch:"+args;
+    args[0] = "ytsearch:"+args.join(' ')
+    return args;
   }
 };
 
@@ -370,43 +394,20 @@ const generateUUID = () => {
 };
 
 const downloadSong = (url, user, channel, cb) => {
-  if(url.startsWith("twitch:")){ //get audio only mode if twitch
-    var channel = url.replace("twitch:", "");
-    request("http://api.twitch.tv/api/channels/"+channel+"/access_token", (err, res, body) => {
-      if(!err){
-        var token = JSON.parse(body);
-        request("http://usher.twitch.tv/api/channel/hls/"+channel+".m3u8?player=twitchweb&&token="+token.token+"&sig="+token.sig+"&allow_audio_only=true&type=any&p="+Math.floor(Math.random() * 100000), (err, res, body) => {
-          if(!err){
-            var parser = m3u8.createStream();
-            var s = new stream.Readable();
-            s.push(body);
-            s.push(null);
-            s.pipe(parser);
-            parser.on('item', item => {
-              if(item.get('video') == "audio_only"){
-                return cb({url: item.get('uri'), user, title: channel, protocol: "m3u8"});
-              }
-            });
-          }else{
-            return channel.sendMessage("```Stream unavailable```");
-          }
-        });
-      }else{
-        return channel.sendMessage("```Stream unavailable```");
-      }
-    });
-  }else{
-    const _download = (url) => {
+    const _download = (url, data, playlist) => {
       var filename = generateUUID() + ".mp3";
       var songpath = path.join(__dirname + '/songs/', filename);
       var downloaded = 0;
       var songInfo;
-      var video = youtubedl(url, ['-f', 'bestaudio/best']);
+      var video = youtubedl(url, ['-f', 'bestaudio/best'], {cwd: __dirname, maxBuffer: Infinity});
       channel.sendTyping();
       video.on('info', info => {
         songInfo = info;
         songInfo.filepath = songpath;
         songInfo.user = user;
+        for(prop in data){
+          songInfo[prop] = data[prop];
+        }
         console.log('Download started');
         console.log('title: ' + info.title);
         console.log('size: ' + info.size);
@@ -425,20 +426,34 @@ const downloadSong = (url, user, channel, cb) => {
       video.pipe(fs.createWriteStream(songpath));
       video.on('end', () => {
         console.log("Download Complete!");
-        if(songInfo.protocol == "m3u8") fs.unlink(songpath);
+        if(songInfo.protocol == "m3u8") fs.unlink(songpath, (err) => {if(err)console.log(err);});
         downloaded = 1;
         cb(songInfo);
+        if(playlist && playlist.length) _next(playlist[0].url, playlist[0].data, playlist.splice(1))
       });
       video.on('error', err => {
         console.log(err);
-        fs.unlink(songpath);
+        fs.unlink(songpath, (err) => {if(err)console.log(err);});
         var spot = err.toString().indexOf("ERROR: ");
         channel.sendMessage("```"+err.toString().substring(spot)+"```");
       });
-      video.on('next', _download);
-      };
-    _download(url);
-  }
+      var _next = (url, data, playlist) => {
+        setTimeout(() => _download(url, data, playlist), 1000);
+      }
+      video.on('next', _next);
+    };
+      channel.sendTyping();
+      if(url[0].startsWith(":")){
+        downloaders.find(d => ":"+d.prefix+":" == url[0].substring(0, url[0].substr(1).indexOf(":")+2)).download(url, {user: user}, (err, res) => {
+          if(err) return channel.sendMessage("Error: `"+err.message+'`');
+          if(res[0].direct) cb(res[0].data)
+          else{
+            _download(res[0].url, res[0].data, res.splice(1));
+          }
+        });
+      }else{
+        _download(url[0]);
+      }
 };
 
 const playSong = (file, channel, client, config) => {
@@ -460,7 +475,6 @@ const playSong = (file, channel, client, config) => {
 
   encoder.once("unpipe", () => {
     encoder.destroy();
-    if(music.songQ[channel.guild.id]) delete music.songQ[channel.guild.id].now;
     _delete = () => {
       fs.unlink(file, (err) => {
         if(err){
@@ -473,6 +487,9 @@ const playSong = (file, channel, client, config) => {
       });
     }
     _delete();
+    if(!channel.guild) return;
+    if(music.songQ[channel.guild.id]) delete music.songQ[channel.guild.id].now;
+    delete music.votes[channel.guild.id];
     processQueue(channel, client, config);
   });
 
