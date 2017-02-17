@@ -5,7 +5,7 @@ var config = {
   cmdPrefix: ",", //The character or string commands must start with. DEFAULT: "!"
   allowInvite: true, //Boolean. If true, the !invite command is allowed, which sends an oauth link to add the bot to different servers. DEFAULT: false
 
-  volume: 1.5, //Audio volume. 0 = 0%, 0.5 = 50%, 1 = 100%, etc. Be careful not to set it to 50 (500%) or something similar. DEFAULT: 0.5
+  volume: 1, //Audio volume. 0 = 0%, 0.5 = 50%, 1 = 100%, etc. Be careful not to set it to 50 (500%) or something similar. DEFAULT: 0.5
   queueDisplaySize: 10, //The amount of tracks shown with the queue command. DEFAULT: 10
   limitToSummoner: false, //Give only the person who summoned the bot access to !stop or !remove, etc. DEFAULT: true
   voteSkip: false, //Vote for skipping a song, instead of just having one person skipping. DEFAULT: true
