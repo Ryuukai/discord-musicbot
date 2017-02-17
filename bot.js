@@ -399,7 +399,10 @@ const downloadSong = (url, user, channel, cb) => {
       var songpath = path.join(__dirname + '/songs/', filename);
       var downloaded = 0;
       var songInfo;
-      var video = youtubedl(url, ['-f', 'bestaudio/best'], {cwd: __dirname, maxBuffer: Infinity});
+      var video = youtubedl(url, [
+        '-f', 'bestaudio/best'
+        '--audio-format', 'opus'
+      ], {cwd: __dirname, maxBuffer: Infinity});
       channel.sendTyping();
       video.on('info', info => {
         songInfo = info;
