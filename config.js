@@ -1,5 +1,5 @@
 var config = {
-  token: "Mjg3ODc0Mjk5NTg1MzYzOTY5.C7biSQ.W9kpKJdCCbwqwKVDJBBjzKn78po", //Insert your bot token here, you can get this from https://discordapp.com/developers/applications/me
+  token: "MzM5ODQ1NzEwNTc5MjM2ODY1.DFp5gA.KlnF0hCkz_zVsXKShmXJzdRrN0o", //Insert your bot token here, you can get this from https://discordapp.com/developers/applications/me
   twitchClientId: "1v79zvjnxeyocbh5x4i3mnloboyac3", //Because twitch is a dick and requires it now (https://www.twitch.tv/settings/connections)
   ownerID: "110076057167618048", //Your (bot owner's) id for extra access. Can be blank for no owner.
   cmdPrefix: ",", //The character or string commands must start with. DEFAULT: "!"
@@ -10,10 +10,10 @@ var config = {
   limitToSummoner: false, //Give only the person who summoned the bot access to !stop or !remove, etc. DEFAULT: true
   voteSkip: false, //Vote for skipping a song, instead of just having one person skipping. DEFAULT: true
 
-  displaySongAsGame: true, //Boolean. If true, bot will show the current song at its status. Not recommended if the bot is in multiple servers. DEFAULT: true
-  showDefaultGame: false, //Boolean. If true and nothing else is playing, the bot's status will be the default game configurable below. DEFAULT: false
+  displaySongAsGame: false, //Boolean. If true, bot will show the current song at its status. Not recommended if the bot is in multiple servers. DEFAULT: true
+  showDefaultGame: true, //Boolean. If true and nothing else is playing, the bot's status will be the default game configurable below. DEFAULT: false
   defaultGame: {
-    name: "", //The game name
+    name: "with bananas", //The game name
     type: 0, //0 = "Playing", 1 = "Streaming"
     url: "" //Required for stream mode. Needs to be a valid twitch url.
   },
