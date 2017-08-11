@@ -21,7 +21,7 @@ var music = {
 }
 var downloaders = [];
 
-client.Dispatcher.on("GATEWAY_READY", e => {
+client.Dispatcher.on(Events.GATEWAY_READY, e => {
   console.log(`Connected as: ${client.User.username} - ${client.User.id}`);
   startup = new Date();
   if(config.showDefaultGame) client.User.setGame(config.defaultGame);
@@ -45,7 +45,7 @@ client.Dispatcher.on("GATEWAY_READY", e => {
   });
 });
 
-client.Dispatcher.on("MESSAGE_CREATE", e => {
+client.Dispatcher.on(Events.MESSAGE_CREATE, e => {
   if(e.message.isPrivate){
     console.log(`[DM] ${e.message.author.username}: ${e.message.content}`);
   }else{
@@ -289,12 +289,12 @@ client.Dispatcher.on("MESSAGE_CREATE", e => {
   }
 });
 
-client.Dispatcher.on("DISCONNECTED", e => {
+client.Dispatcher.on(Events.DISCONNECTED, e => {
   console.log(`Disconnected. ${e.error}`);
   if(e.autoReconnect) console.log(`Reconnecting in ${e.delay}`);
 });
 
-client.Dispatcher.on("VOICE_DISCONNECTED", event => {
+client.Dispatcher.on(Events.VOICE_DISCONNECTED, event => {
   if(event.voiceConnection.guild.id && music.songQ[event.voiceConnection.guild.id]){
     function reconnect(channel) {
       channel.join().catch(err => setTimeout(reconnect(channel), 5000));
