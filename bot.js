@@ -1,4 +1,5 @@
 const Discordie = require('discordie');
+const Events = Discordie.Events;
 const client = new Discordie({autoReconnect: true});
 const config = require("./config");
 if(!config.token) throw "MISSING TOKEN FROM CONFIG";
